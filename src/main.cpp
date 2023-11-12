@@ -2,6 +2,7 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
 #include "LittleFS.h"
 
 
@@ -44,30 +45,36 @@ ColorMapping colorMappings[] = {
 
 void getCurrentColor(){
 
-  const char* host = "www.googleapis.com";
+  const char* host = "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-09T00:00:00Z&timeMax=2023-11-09T23:59:59Z";
   const int httpsPort = 443;
+  HTTPClient http;
 
-  // Use WiFiClientSecure class to create TLS connection
-  WiFiClientSecure client;
-  if (!client.connect(host, httpsPort)) {
-    Serial.println("Connection failed");
-    return;
+  //create a wifi client instance
+  WiFiClient client;
+
+
+  // Replace the URL with your actual API endpoint
+  http.begin(client, "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-09T00:00:00Z&timeMax=2023-11-09T23:59:59Z");
+
+  // Replace the token with your actual access token
+  http.addHeader("Authorization", "Bearer ya29.a0AfB_byCqPxTXGhN-AKZOG2iPEJAIkA_rpf4_SGXSVxuy085DhAFW2-8q7i5CLY6FuQEKseV0UiVqPibHs7_Px-5kaYAnoGn-2ChDqwOsN0YdVrfkCxvP5ZtFVNfxPiedwj6HEbshdothXgLqqXf4pFrek9aSQbvmssgaCgYKATUSARMSFQHGX2Mi_A4w6g1fUY1F4azHvKhRbA0170");
+  http.addHeader("Accept", "application/json");
+
+  int httpCode = http.GET();
+
+  if (httpCode > 0) {
+    String payload = http.getString();
+    Serial.println(httpCode);
+    Serial.println(payload);
+  } else {
+    Serial.println("HTTP request failed");
   }
-  client.print("GET /calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-09T00:00:00Z&timeMax=2023-11-09T23:59:59Z HTTP/1.0\r\n");
-  client.print("Host: www.googleapis.com\r\n");
-  client.print("Authorization: Bearer ya29.a0AfB_byCbHcMR0eKz2pgRlHfbzsNqVS3gouC6dXQUQwtK71UXh0v4ON4Gh-0pIhnPCRPV1CiCTyo-BPtZChDS2zBcrRnwiDMznouSmJwC2CVGtSp0lMyiC_Amkvvkoo-ao8b20hFn5Ba3zv7zjryP-lb5DmlvMvf8UwaCgYKAY0SARMSFQHGX2Mig7dHLBxC839jUGa74WFR0A0169\r\n");
-  client.print("Connection: close\r\n\r\n");
 
-  delay(500);
-
-  // Read and print response
-  while (client.available()) {
-    String line = client.readStringUntil('\r');
-    Serial.print(line);
-  }
-
-
+  http.end();
 }
+
+
+
 
 //littlefs function to read a file
 String readFile(String filePath) {
@@ -141,7 +148,7 @@ void handleRoot() {
     content += "        place-items: center;\n";
     content += "        height: 100vh;\n";
     content += "        border: solid;\n";
-    content += "        border-color: black;\n";
+    content += "        border-color: black;\n";º
     content += "    }\n";
     content += "\n";
     content += "    .enviar {\n";
@@ -229,11 +236,11 @@ void handlePostRequest() {
   Serial.println(WiFi.localIP());
   //Declare the redirect website content
   String content = "<head>";
-  content += "<meta http-equiv=\"refresh\" content=\"0;url=https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/login/test2/oauthTutorial/\">";
+  content += "<meta http-equiv=\"refresh\" content=\"0;url=https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?localId=${localId}\">";
   content += "<title>Redirecting...</title>";
   content += "</head>";
   content += "<body>";
-  content += "<p>If you are not redirected, <a href=\"https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/login/test2/oauthTutorial/\">click here</a>.</p";
+  content += "<p>If you are not redirected, <a href=\"https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?localId=${localId}\">click here</a>.</p";
   content += "</body>";
   server.send(301, "text/html", content); // Send a response to the client
 }
@@ -291,7 +298,7 @@ content += "\n";
 content += "        // Add click event listener to the button\n";
 content += "        button.addEventListener(\"click\", function() {\n";
 content += "            // Construct the URL with the local ID as a parameter\n";
-content += "            let redirectUrl = `https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/login/test2/oauthTutorial/?localId=${localId}`;\n";
+content += "            let redirectUrl = `https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial/?localId=${localId}`;\n";
 content += "\n" ;
 content += "            // Redirect the user to the specified URL\n";
 content += "            window.location.href = redirectUrl;\n";
@@ -326,6 +333,9 @@ void setup() {
 
   //receive net info
   server.on("/submit", HTTP_POST, handlePostRequest); // Set up the POST request handler
+
+  //send curl request to retrieve the color
+  server.on("/curl", HTTP_GET, getCurrentColor);
 
   //login test with an uploaded html file
   //server.on("/login",googleLogin);
