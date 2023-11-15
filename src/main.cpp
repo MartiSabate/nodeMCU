@@ -1,13 +1,84 @@
 //ESTE ES EL FICHERO CON EL POC PARA MOSTRAR LAS REDES WIFI EN UN SERVIDOR WEB, EVITANDO USAR WIFI MANAGER
 
-#include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include "LittleFS.h"
+#include <WiFiClientSecureBearSSL.h>
+#include <ArduinoJson.h>
+#include <Adafruit_NeoPixel.h>
+#include <LittleFS.h>
+
+
+// Include local defined libraries
+
+#include <ledsCalSync.h>
+#include <focusRequests.h>
+
+// GLOBAL VARIABLES
 
 
 // Declare local variable chipId
 String chipIdString = "";
+
+
+
+
+
+
+
+
+// Function to send the requests < FUNCTION CODE 2343283247
+
+void sendHttpRequest(String url, String authorizationHeader = "", String acceptHeader = "") {
+  // wait for WiFi connection
+  if ((WiFi.status() == WL_CONNECTED)) {
+
+
+    std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
+
+    //client->setFingerprint(fingerprint);
+    // Or, if you happy to ignore the SSL certificate, then use the following line instead:
+    client->setInsecure();
+
+    HTTPClient https;
+
+    Serial.print("[HTTPS] begin...\n");
+
+    if (https.begin(*client, url)) {
+      //Setting the headers if necessary. In a future set the headers from an Array maybe < TODO
+      if (authorizationHeader != "") {
+        https.addHeader("Authorization", authorizationHeader);
+      }
+      if (acceptHeader != "") {
+        https.addHeader("Accept", acceptHeader);
+      }
+      Serial.print("[HTTPS] GET...\n");
+      // start connection and send HTTP header
+      int httpCode = https.GET();
+
+      // httpCode will be negative on error
+      if (httpCode > 0) {
+        // HTTP header has been send and Server response header has been handled
+        Serial.printf("[HTTPS] GET... code: %d\n", httpCode);
+
+        // file found at server
+        if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+          String payload = https.getString();
+          //Serial.println(payload);
+          extractColorId(payload);
+        }
+      } else {
+        Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+      }
+      
+      https.end();
+    } else {
+      Serial.printf("[HTTPS] Unable to connect\n");
+    }
+  }
+
+}
 
 
 //start web server
@@ -23,55 +94,8 @@ void initFS() {
   }
 }
 
-//Define the Google Calendar color ID conversion
-struct ColorMapping {
-    int colorId;
-    const char* hexadecimal;
-};
-
-ColorMapping colorMappings[] = {
-    {1, "#008080"},
-    {2, "#00FF00"},
-    {3, "#FF00FF"},
-    {4, "#800000"},
-    {5, "#FFFF00"},
-    {6, "#FFB3AE"},
-    {7, "#00FFFF"},
-    {8, "#000000"},
-    {9, "#000080"},
-    {10, "#008000"},
-    {11, "#FF0000"}
-};
-
-void getCurrentColor(){
-
-  const char* host = "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-09T00:00:00Z&timeMax=2023-11-09T23:59:59Z";
-  const int httpsPort = 443;
-  HTTPClient http;
-
-  //create a wifi client instance
-  WiFiClient client;
 
 
-  // Replace the URL with your actual API endpoint
-  http.begin(client, "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-09T00:00:00Z&timeMax=2023-11-09T23:59:59Z");
-
-  // Replace the token with your actual access token
-  http.addHeader("Authorization", "Bearer ya29.a0AfB_byCqPxTXGhN-AKZOG2iPEJAIkA_rpf4_SGXSVxuy085DhAFW2-8q7i5CLY6FuQEKseV0UiVqPibHs7_Px-5kaYAnoGn-2ChDqwOsN0YdVrfkCxvP5ZtFVNfxPiedwj6HEbshdothXgLqqXf4pFrek9aSQbvmssgaCgYKATUSARMSFQHGX2Mi_A4w6g1fUY1F4azHvKhRbA0170");
-  http.addHeader("Accept", "application/json");
-
-  int httpCode = http.GET();
-
-  if (httpCode > 0) {
-    String payload = http.getString();
-    Serial.println(httpCode);
-    Serial.println(payload);
-  } else {
-    Serial.println("HTTP request failed");
-  }
-
-  http.end();
-}
 
 
 
@@ -148,7 +172,7 @@ void handleRoot() {
     content += "        place-items: center;\n";
     content += "        height: 100vh;\n";
     content += "        border: solid;\n";
-    content += "        border-color: black;\n";º
+    content += "        border-color: black;\n";
     content += "    }\n";
     content += "\n";
     content += "    .enviar {\n";
@@ -224,7 +248,7 @@ void handlePostRequest() {
 
   //connect to wifi
   WiFi.begin(red, contrasena);
-  //indicate in serial monitor the wifi connection status
+  //indicate in serial monitor the wifi connection status/
     while (WiFi.status() != WL_CONNECTED) {
      delay(500);
      Serial.print(".");
@@ -234,13 +258,15 @@ void handlePostRequest() {
   Serial.println("WiFi connected");
   // Print the IP address
   Serial.println(WiFi.localIP());
+  String localId = readFile("/localId.txt");
+
   //Declare the redirect website content
   String content = "<head>";
-  content += "<meta http-equiv=\"refresh\" content=\"0;url=https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?localId=${localId}\">";
+  content += "<meta http-equiv=\"refresh\" content=\"0;url=https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?local=" + localId + "\">";
   content += "<title>Redirecting...</title>";
   content += "</head>";
   content += "<body>";
-  content += "<p>If you are not redirected, <a href=\"https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?localId=${localId}\">click here</a>.</p";
+  content += "<p>If you are not redirected, <a href=\"https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?local=" + localId + "\">click here</a>.</p";
   content += "</body>";
   server.send(301, "text/html", content); // Send a response to the client
 }
@@ -298,7 +324,7 @@ content += "\n";
 content += "        // Add click event listener to the button\n";
 content += "        button.addEventListener(\"click\", function() {\n";
 content += "            // Construct the URL with the local ID as a parameter\n";
-content += "            let redirectUrl = `https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial/?localId=${localId}`;\n";
+content += "            let redirectUrl = `https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/login/test2/oauthTutorial?local=" + localId + "`;\n";
 content += "\n" ;
 content += "            // Redirect the user to the specified URL\n";
 content += "            window.location.href = redirectUrl;\n";
@@ -311,12 +337,41 @@ content += "</html>\n";
 // Send a response to the client
 
 server.send(200, "text/html", content);
+//Define parameters as variables
+
+
+const char* acceptHeader1 = "application/json";
+  
+String accessToken = getAccessToken();
+String serverUrl1 = "https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/writeToDatabase.php?local=122345555345&accessToken=" + accessToken;
+String serverUrl2 = "https://elmejordominiodepruebasdelahistoriadelahumanidad.shop/focusWebTest/retrieveFromDatabase.php?local=9898011&accessToken=" + accessToken;
+//String serverUrl3 = "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-09T00:00:00Z&timeMax=2023-11-09T23:59:59Z";
+String serverUrl3 = "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&orderBy=startTime&singleEvents=true&timeMin=2023-11-14T00:00:00Z&timeMax=2023-11-14T23:59:59Z";
+
+
+while (1==1){
+   //call to the website
+  String accessToken = getAccessToken();
+  String authorizationHeader1 = "Bearer " + accessToken;
+  Serial.println("Request to " + serverUrl3);
+  sendHttpRequest(serverUrl3, authorizationHeader1, acceptHeader1);
+  
+  Serial.println();
+  Serial.println("Waiting 10 sec before the next round...");
+  
+  delay(10000);
+}
 
 }
 
 void setup() {
   Serial.begin(115200);
   initFS();
+
+  //stop the leds
+  strip.begin();  // Inicializar la tira de LEDs
+  strip.show();
+  setColor(strip.Color(0, 0, 0)); // switch off all the leds
 
   //test client id
   //getCurrentColor();
@@ -346,6 +401,15 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  //call to the website
+  /*
+  Serial.println("Request to " + serverUrl3);
+  sendHttpRequest(serverUrl3, authorizationHeader1, acceptHeader1);
+  
+  Serial.println();
+  Serial.println("Waiting 10 sec before the next round...");
+  delay(10000);
+  */
 }
 
 
