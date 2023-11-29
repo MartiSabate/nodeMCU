@@ -7,7 +7,6 @@
 
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
-#include <ArduinoJson.h>
 
 
 // constants definition 
@@ -15,25 +14,7 @@
 #define PIN            D4  // Pin de salida al que está conectada la tira de LEDs
 #define NUM_LEDS       60  // Número de LEDs en tu tira
 
-//Define the Google Calendar color ID conversion
-struct ColorMapping {
-    int colorId;
-    uint32_t hexadecimal;
-};
 
-const ColorMapping colorMappings[] = {
-    {1,  0x008080},
-    {2,  0x00FF00},
-    {3,  0xFF00FF},
-    {4,  0x800000},
-    {5,  0xFFFF00},
-    {6,  0xFFB3AE},
-    {7,  0x00FFFF},
-    {8,  0x000000},
-    {9,  0x000080},
-    {10, 0x008000},
-    {11, 0xFF0000}
-};
 
 // strip object definition
 
@@ -50,56 +31,35 @@ void setColor(uint32_t color) {
 }
 
 
-// Function to extract "colorId" from JSON response
-void extractColorId(String jsonResponse) {
 
+// Convert a String data type to uint32_t
 
-  // Create a JSON buffer
-  StaticJsonDocument<2000> doc;
+uint32_t stringToUint32(String str) {
+  // Convert String to const char* for strtoul function
+  const char* charBuffer = str.c_str();
 
-  // Deserialize the JSON data
-  DeserializationError error = deserializeJson(doc, jsonResponse);
+  // Use strtoul to convert the string to uint32_t
+  uint32_t result = strtoul(charBuffer, NULL, 10);
 
-  // Check for parsing errors
-  if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.c_str());
-    return;
-  }
-
-
-  /*
-  // Extract the value of "colorId"
-  const char* colorId = doc["items"][0]["colorId"];
-  */
-  const char* colorId = doc["items"][0]["colorId"];
-
-  // Check if the "items" array exists and has at least one item
-  if (doc.containsKey("items") && doc["items"].is<JsonArray>() && doc["items"].size() > 0) {
-    // Check if the "colorId" key exists in the first item
-    if (doc["items"][0].containsKey("colorId")) {
-      // Extract the value of "colorId"
-
-      // Print the extracted value
-      Serial.print("Color ID: ");
-      Serial.println(colorId);
-      int color = atoi(colorId);
-      uint32_t hexColorForID11 = colorMappings[color-1].hexadecimal; // Index 10 corresponds to color ID 11
-      strip.begin();  // Inicializar la tira de LEDs
-      strip.show();   // Apagar todos los LEDs al principio
-      setColor(hexColorForID11);
-
-    } else {
-      Serial.print("Color ID: ");
-      Serial.println("1");
-    }
-  } else {
-    Serial.println("No items array in the JSON response.");
-  }
-
-
+  return result;
 }
 
+// Function to convert a hexadecimal color string to RGB
+uint32_t hexStringToColor(const String& hexString) {
+  // Skip the '#' character
+  String hexSubstring = hexString.substring(1);
+  
+  // Convert the remaining hex digits to an integer
+  uint32_t hexValue = strtoul(hexSubstring.c_str(), NULL, 16);
+
+  
+  // Extract red, green, and blue components
+  uint8_t red = (hexValue >> 16) & 0xFF;
+  uint8_t green = (hexValue >> 8) & 0xFF;
+  uint8_t blue = hexValue & 0xFF;
+
+  return strip.Color(red, green, blue);
+}
 
 
 
