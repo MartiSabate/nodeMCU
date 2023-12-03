@@ -8,6 +8,7 @@
 #include <LittleFS.h>
 
 
+
 // Include local defined libraries
 
 #include <ledsCalSync.h>
@@ -61,7 +62,7 @@ Serial.println("Stopping Access Point...");
 
 for ( int i = 0; i<5; i++){
 
-  Serial.print(5-i+".");
+  Serial.print(5-i + ".");
   delay(1000);
   
 }
@@ -181,7 +182,9 @@ void shutdown() {
   server.send(200, "text/html", htmlCode);
   
   
-  
+  // Shut down the AP
+
+  stopAccessPoint();
 
 
 
@@ -190,7 +193,11 @@ void shutdown() {
 
 
 
+void sendImage(){
 
+  server.send(200, "/brain.png", "http://192.168.4.1/brain.png");
+
+}
 
 
 
@@ -240,108 +247,151 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
 //form to select the networks
 void handleRoot() {
 
-   String html = "<!DOCTYPE html>"
-                "<html lang=\"es\">"
-                "<head>"
-                "<meta charset=\"UTF-8\">"
-                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
-                "<title>Simple Dashboard</title>"
-                "<style>"
-                "    body {"
-                "        font-family: Arial, sans-serif;"
-                "        display: flex;"
-                "        flex-direction: column;"
-                "        align-items: center;"
-                "        justify-content: center;"
-                "        height: 100vh;"
-                "        margin: 0;"
-                "    }"
-                ""
-                "    h2 {"
-                "        text-align: center;"
-                "    }"
-                ""
-                "    .caja {"
-                "        width: 300px;"
-                "        padding: 20px;"
-                "        border: 1px solid #ddd;"
-                "        border-radius: 10px;"
-                "        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);"
-                "    }"
-                ""
-                "    label {"
-                "        display: block;"
-                "        margin-bottom: 5px;"
-                "    }"
-                ""
-                "    input {"
-                "        width: calc(100% - 12px);"
-                "        margin-bottom: 10px;"
-                "        padding: 8px;"
-                "        box-sizing: border-box;"
-                "    }"
-                ""
-                "    input[type=\"color\"] {"
-                "        width: 100%;"
-                "        box-sizing: border-box;"
-                "        padding: 8px;"
-                "        margin-bottom: 10px;"
-                "    }"
-                ""
-                "    input[type=\"submit\"] {"
-                "        width: 100%;"
-                "        padding: 10px;"
-                "        background-color: #db16c8;"
-                "        color: white;"
-                "        border: none;"
-                "        border-radius: 5px;"
-                "        cursor: pointer;"
-                "    }"
-                ""
-                "    button {"
-                "        width: 100%;"
-                "        padding: 10px;"
-                "        background-color: #FF0000;"
-                "        color: white;"
-                "        border: none;"
-                "        border-radius: 5px;"
-                "        cursor: pointer;"
-                "    }"
-                "    input[type=\"submit\"]:hover {"
-                "        background-color: #99088a;"
-                "    }"
-                "</style>"
-                "</head>"
-                "<body>"
-                "<h2>Configuración de tu Pomodoro</h2>"
-                "<div class=\"caja\">"
-                "<form action=\"/submit\" method=\"post\">"
-                "<label for=\"focusHours\">Horas de Focus:</label>"
-                "<input type=\"number\" id=\"focusHours\" name=\"focusHours\" min=\"0\" max=\"24\" placeholder=\"Horas\" value=\"0\" required>"
-                "<label for=\"focusMinutes\">Minutos de Focus:</label>"
-                "<input type=\"number\" id=\"focusMinutes\" name=\"focusMinutes\" min=\"0\" max=\"59\" placeholder=\"Minutos\" value=\"25\" required>"
-                "<label for=\"focusColor\">Color de Foco:</label>"
-                "<input type=\"color\" id=\"focusColor\" name=\"focusColor\" value=\"#4CAF50\" required>"
-                "<label for=\"breakMinutes\">Minutos de Descanso:</label>"
-                "<input type=\"number\" id=\"breakMinutes\" name=\"breakMinutes\" min=\"0\" max=\"30\" placeholder=\"Minutos para descanso\" value=\"5\" required>"
-                "<label for=\"breakColor\">Color de Descanso:</label>"
-                "<input type=\"color\" id=\"breakColor\" name=\"breakColor\" value=\"#FF5733\" required>"
-                "<label for=\"cycles\"> Numero de Pomodoros a realizar</label>"
-                "<input type=\"number\" id=\"cycles\" name=\"cycles\" min=\"1\" max=\"100\" value=\"1\" required>"
-                "<input type=\'hidden\' name=\'config\' value=\'true\'>"
-                "<input type=\"submit\" value=\"Guardar Configuración\">"
-                "</form>"
-                "<form action=\"/shutdown\">"
-                "<button type=\"submit\">Apagar zona WiFi</button>"
-                "</form>"
-                "<div>"
-                "</body>"
-                "</html>";
+  String html = R"(
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Configuración de tu Pomodoro</title>
+      <style>
+
+          html, body {
+              height: 100%;
+              margin: 0;
+          }
+          body {
+              font-family: 'Arial', sans-serif;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background-color: #000; /* Black background color */
+              color: #fff; /* Text color */
+              transform: scale(1); /* Adjust the zoom level as needed */
+
+
+          }
+
+          .header-container {
+              display: flex;
+              align-items: center;
+          }
+
+          .header-container img {
+              width: 50px; /* Adjust the width as needed */
+              margin-right: 10px; /* Adjust the margin as needed */
+          }
+
+          h2 {
+              text-align: center;
+          }
+
+          form {
+              width: 300px;
+              padding: 20px;
+              border: 2px solid #4CAF50; /* Premium green border, customize as needed */
+              border-radius: 10px;
+              box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+              background-color: #111; /* Dark background color, customize as needed */
+          }
+
+          label {
+              display: block;
+              margin-bottom: 5px;
+              color: #4CAF50; /* Premium green color, customize as needed */
+          }
+
+          input {
+              width: calc(100% - 12px);
+              margin-bottom: 10px;
+              padding: 8px;
+              box-sizing: border-box;
+              background-color: #333; /* Darker background color, customize as needed */
+              color: #fff; /* Text color */
+              border: 1px solid #4CAF50; /* Premium green border, customize as needed */
+              border-radius: 5px;
+          }
+
+          input[type="color"] {
+              width: 100%;
+              box-sizing: border-box;
+              padding: 8px;
+              margin-bottom: 10px;
+          }
+
+          input[type="submit"] {
+              width: 100%;
+              padding: 10px;
+              background-color: #4CAF50; /* Premium green color, customize as needed */
+              color: #fff; /* Text color */
+              border: 2px solid #fff; /* White border, customize as needed */
+              border-radius: 5px;
+              cursor: pointer;
+          }
+
+          input[type="submit"]:hover {
+              background-color: #45a049; /* Darker green on hover */
+          }
+
+          .wifi-shutdown-container {
+              margin-top: 20px; /* Add some space between the forms */
+              box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+              background-color: #111; /* Customize as needed */
+          }
+
+          .wifi-shutdown-container button {
+              width: 100%;
+              padding: 10px;
+              background-color: #FF5733; /* Customize as needed */
+              color: #fff; /* Text color */
+              border: 2px solid #fff; /* White border, customize as needed */
+              cursor: pointer;
+          }
+
+          .wifi-shutdown-container button:hover {
+              background-color: #E04A2E; /* Darker orange on hover */
+          }
+          
+      </style>
+  </head>
+  <body>
+      <div class="header-container">
+          <img src="http://192.168.4.1/brain">
+          <h2>Configuración de tu Pomodoro</h2>
+      </div>
+
+      <form action="/submit" method="post">
+          <label for="focusHours">Horas de Focus:</label>
+          <input type="number" id="focusHours" name="focusHours" min="0" max="24" placeholder="Horas" value="0" required>
+          <label for="focusMinutes">Minutos de Focus:</label>
+          <input type="number" id="focusMinutes" name="focusMinutes" min="0" max="59" placeholder="Minutos" value="25" required>
+          <label for="focusColor">Color de Foco:</label>
+          <input type="color" id="focusColor" name="focusColor" value="#4CAF50" required>
+          <label for="breakMinutes">Minutos de Descanso:</label>
+          <input type="number" id="breakMinutes" name="breakMinutes" min="0" max="30" placeholder="Minutos para descanso" value="5" required>
+          <label for="breakColor">Color de Descanso:</label>
+          <input type="color" id="breakColor" name="breakColor" value="#FF5733" required>
+          <label for="cycles">Número de Pomodoros a realizar:</label>
+          <input type="number" id="cycles" name="cycles" min="1" max="100" value="1" required>
+          <input type='hidden' name='config' value='true'>
+          <input type="submit" value="Guardar Configuración">
+      </form>
+      <div class="wifi-shutdown-container">
+
+          <form action="/shutdown">
+              <button type="submit">Apagar zona WiFi</button>
+      </div>
+  </body>
+  </html>
+)";
   server.send(200, "text/html", html);
 
-CONFIG = true;
+// Set the config to true once the menu has been loaded at least 1 time 
 
-shutdown();
+CONFIG = true;
 
 }
 
@@ -435,10 +485,10 @@ void handleSubmit() {
   int breakMinutes = breakMinutesString.toInt();
   int cyclesInt = cyclesString.toInt();
 
-  //Declare all the time in seconds
+  // Declare all the time in seconds < TO REVIEW IF THESE 2 VARIABLES ARE NECESSARY
 
-  int focusSecs = focusHours * 60 * 60 + focusMinutes * 60 ;
-  int breakSecs = breakMinutes * 60 ;
+  //int focusSecs = focusHours * 60 * 60 + focusMinutes * 60 ;
+  //int breakSecs = breakMinutes * 60 ;
 
 
   /*
@@ -513,10 +563,26 @@ void setup() {
   // Stop the access point
   server.on("/shutdown", HTTP_GET, shutdown);
 
+  // Send the png file
+  server.on("/brain", HTTP_GET, sendImage);
 
   // Start web server
   server.begin();
   Serial.println("Servidor web iniciado");
+
+  // Set up captive portal redirection
+  server.onNotFound([]() {
+    if (!CONFIG) {
+      Serial.println("Client connected. Redirecting to captive portal.");
+      server.sendHeader("Location", "/", true);
+      server.send(302, "text/plain", "Redirecting to captive portal...");
+    } else {
+      server.send(404, "text/plain", "Not Found");
+    }
+  });
+
+
+
 }
 
 void loop() {
