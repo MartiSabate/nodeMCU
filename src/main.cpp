@@ -6,6 +6,8 @@
 #include <WiFiClientSecureBearSSL.h>
 #include <Adafruit_NeoPixel.h>
 #include <LittleFS.h>
+#include <DNSServer.h>
+
 
 
 
@@ -19,10 +21,16 @@
 // CONFIGURATION VARIABLE TO BLOCK THE SUBMIT ACCESS WITH THE DEVICE MISSCONFIGURED
 
 bool CONFIG = false;
+// AP IP address global variable
+IPAddress apIPAddress;
 
-// Start web server
+// Declare Web Server
 
 ESP8266WebServer server(80);
+
+// Start DNS Server
+
+DNSServer dnsServer;
 
 
 // Initialize LittleFS
@@ -192,13 +200,91 @@ void shutdown() {
 }
 
 
-
+/* attempt 1 of send image
 void sendImage(){
 
   server.send(200, "/brain.png", "http://192.168.4.1/brain.png");
 
 }
+*/
 
+// attempt 2
+
+void sendImage() {
+
+
+  //Verify if the requested file exists
+  String path = "/brain.png"; //hardcode brain image path
+  Serial.println("Checking file path: " + path);
+  // Check if the file exists
+  if (!LittleFS.exists(path)) {
+    Serial.println("File not found");
+    server.send(404, "text/plain", "File not found");
+    return;
+  }
+
+
+  // Open the file
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    server.send(500, "text/plain", "Failed to open file");
+    return;
+  }
+
+  // Get the file size
+  size_t fileSize = file.size();
+
+  // Send the file content in chunks
+  const size_t bufferSize = 1024;
+  char buffer[bufferSize];
+
+  while (file.available() > 0) {
+    size_t bytesRead = file.readBytes(buffer, std::min(bufferSize, fileSize));
+    server.client().write(reinterpret_cast<uint8_t*>(buffer), bytesRead);
+    fileSize -= bytesRead;
+  }
+
+  // Close the file
+  file.close();
+
+}
+
+//send font function
+void sendFont() {
+  // Verify if the requested font file exists
+  String fontPath = "/Oswald-Regular.ttf"; // Adjust the font file path
+  Serial.println("Checking font file path: " + fontPath);
+
+  // Check if the font file exists
+  if (!LittleFS.exists(fontPath)) {
+    Serial.println("Font file not found");
+    server.send(404, "text/plain", "Font file not found");
+    return;
+  }
+
+  // Open the font file
+  File fontFile = LittleFS.open(fontPath, "r");
+  if (!fontFile) {
+    server.send(500, "text/plain", "Failed to open font file");
+    return;
+  }
+
+  // Get the font file size
+  size_t fontFileSize = fontFile.size();
+
+  // Send the font file content in chunks
+  const size_t bufferSize = 1024;
+  char buffer[bufferSize];
+
+  while (fontFile.available() > 0) {
+    size_t bytesRead = fontFile.readBytes(buffer, std::min(bufferSize, fontFileSize));
+    server.client().write(reinterpret_cast<uint8_t*>(buffer), bytesRead);
+    fontFileSize -= bytesRead;
+  }
+
+  // Close the font file
+  fontFile.close();
+}
 
 
 
@@ -242,11 +328,24 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
   file.close();
 }
 
+// list all the files fron the directory passed as parameter
+
+void listFiles(const char* directory) {
+  Serial.println("Listing files in directory: " + String(directory));
+
+  Dir dir = LittleFS.openDir(directory);
+
+  while (dir.next()) {
+    Serial.print("  FILE: ");
+    Serial.println(dir.fileName());
+  }
+
+  Serial.println("File listing complete");
+}
 
 
-//form to select the networks
+//Pomodoro focus configuration platform
 void handleRoot() {
-
   String html = R"(
     <!DOCTYPE html>
     <html lang="es">
@@ -255,22 +354,28 @@ void handleRoot() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Configuración de tu Pomodoro</title>
       <style>
+          @font-face {
+              font-family: 'Oswald';
+              src: url('/font') format('truetype'); /* Assuming the "/font" endpoint is correctly set up to serve the font */
+              font-weight: normal;
+              font-style: normal;
+          }
 
           html, body {
               height: 100%;
               margin: 0;
           }
           body {
-              font-family: 'Arial', sans-serif;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              margin: 0;
-              background-color: #000; /* Black background color */
-              color: #fff; /* Text color */
-              transform: scale(1); /* Adjust the zoom level as needed */
+            font-family: 'Oswald', 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000; /* Black background color */
+            color: #fff; /* Text color */
+            transform: scale(1); /* Adjust the zoom level as needed */
 
 
           }
@@ -323,6 +428,7 @@ void handleRoot() {
           }
 
           input[type="submit"] {
+              font-family: 'Oswald', 'Arial', sans-serif; /* Add this line to apply the font to the submit button */
               width: 100%;
               padding: 10px;
               background-color: #4CAF50; /* Premium green color, customize as needed */
@@ -343,6 +449,7 @@ void handleRoot() {
           }
 
           .wifi-shutdown-container button {
+              font-family: 'Oswald', 'Arial', sans-serif; /* Add this line to apply the font to the shutdown button */
               width: 100%;
               padding: 10px;
               background-color: #FF5733; /* Customize as needed */
@@ -359,7 +466,7 @@ void handleRoot() {
   </head>
   <body>
       <div class="header-container">
-          <img src="http://192.168.4.1/brain">
+          <img src="/brain">
           <h2>Configuración de tu Pomodoro</h2>
       </div>
 
@@ -387,7 +494,10 @@ void handleRoot() {
   </body>
   </html>
 )";
-  server.send(200, "text/html", html);
+server.send(200, "text/html", html);
+
+sendImage();
+sendFont();
 
 // Set the config to true once the menu has been loaded at least 1 time 
 
@@ -544,10 +654,28 @@ void setup() {
   strip.show();
   setColor(strip.Color(0, 0, 0)); // switch off all the leds
 
- 
   // Iniciar en modo de punto de acceso
   WiFi.mode(WIFI_AP);
   WiFi.softAP("BeamFocus-AP", "password"); // Nombre de la red y contraseña del AP
+
+
+  // list files in /
+  listFiles("/");
+
+
+
+  // Store the local AP IP address
+  apIPAddress = WiFi.softAPIP();
+  Serial.print("WiFi.localIP() value is > ");
+  Serial.println(apIPAddress);
+
+
+
+  
+  // Set up DNS server
+
+  dnsServer.start(53, "local.openfocus", apIPAddress);
+  Serial.println("DNS server started");
 
   // Configurar rutas del servidor web
   server.on("/", HTTP_GET, handleRoot);
@@ -565,6 +693,9 @@ void setup() {
 
   // Send the png file
   server.on("/brain", HTTP_GET, sendImage);
+
+  // Send the ttf (oswald font) file
+  server.on("/font", HTTP_GET, sendFont);
 
   // Start web server
   server.begin();
@@ -586,7 +717,16 @@ void setup() {
 }
 
 void loop() {
+
+  // Listen for DNS Requests
+
+  dnsServer.processNextRequest();
+
+  // Listen for HTTP Requests
+
   server.handleClient();
+
+
  
 }
 
