@@ -7,6 +7,8 @@
 #include <Adafruit_NeoPixel.h>
 #include <LittleFS.h>
 #include <DNSServer.h>
+#include <TaskScheduler.h>
+
 
 
 
@@ -32,6 +34,12 @@ ESP8266WebServer server(80);
 
 DNSServer dnsServer;
 
+// Define task scheduler
+// Create a scheduler object with the maximum number of tasks
+Scheduler scheduler;
+
+
+
 
 // Initialize LittleFS
 void initFS() {
@@ -44,14 +52,41 @@ void initFS() {
   }
 }
 
-
+// timer with minutes as imput 
 void minuteTimer(int minutes){
 
-  for(int i = 0; i<minutes; i++){
+  Serial.println(String(minutes) + " minutes timer started.");
 
-     delay (60000) ;
+  for(int i = 0; i<minutes; i++){
+    int minutesLeft = minutes - i;
+    // Print the current time every minute
+    Serial.println(String(minutesLeft) + " minutes left.");
+
+    delay (60000) ;
     
   }
+}
+
+// Print wifi status (connected or disconnected) as per line 50 https://github.com/dlitz/ArduinoCore-esp8266/blob/master/libraries/ESP8266WiFi/src/include/wl_definitions.h
+
+void printApMode() {
+
+  // 0 = station mode off
+  // 2 = station mode on
+
+  // Check and print WiFi mode
+  int mode = WiFi.getMode();
+  Serial.print("NodeMCU Mode > ");
+  switch (mode) {
+    case 0:
+      Serial.print("OFF\n");
+      break;
+    case 2:
+      Serial.print ("ON\n");
+      break;
+  }
+
+
 }
 
 // Stop the Access Point
@@ -63,21 +98,157 @@ void stopAccessPoint(){
 
 
 //Indicate in console the AP is getting shut down
+printApMode();
 
-Serial.println("Stopping Access Point...");
+Serial.print("Stopping Access Point...");
 
-//5 second delay before stopping the device
 
-for ( int i = 0; i<5; i++){
+//10 second delay before stopping the device
 
-  Serial.print(5-i + ".");
-  delay(1000);
+int delaySeconds = 10;
+
+for ( int i = 0; i<delaySeconds; i++){
+  Serial.print(String(delaySeconds-i));
+  delay(500);
+  Serial.print(".");
+  delay(500);
   
 }
 
+Serial.print("\n---\n");
+// Stop the WiFi AP
+WiFi.softAPdisconnect(true);  // Disconnect clients and stop the AP
+WiFi.mode(WIFI_OFF);          // Switch off WiFi completely or use WIFI_STA if you need to connect to a station
+
+printApMode();
+
+Serial.println("Sleep the arduino indefinitely (until the reset button is pushed / pin 16 is activated)");
+
+ESP.deepSleep(0);
 
 
 }
+
+
+void shutdown() {
+
+String htmlCode = R"(
+  <!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/brainFavicon" sizes="192x192">
+  <link rel="apple-touch-icon" href="/brainFavicon">
+  <title>WiFi Desactivado</title>
+  <style>
+      @font-face {
+          font-family: 'Oswald';
+          src: url('Oswald-Regular.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+      }
+
+      body {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          margin: 0;
+          font-family: 'Oswald', 'Arial', sans-serif;
+          background-color: #000;
+          color: #fff;
+          transform: scale(1);
+      }
+
+      .message {
+          text-align: center;
+          padding: 20px;
+          border: 2px solid #FF0000;
+          border-radius: 8px;
+          max-width: 400px;
+          width: 100%;
+      }
+
+      h1 {
+          color: #FF0000;
+      }
+
+      p {
+          color: #fff;
+      }
+  </style>
+</head>
+<body>
+  <div class="message">
+      <h1>WiFi Desactivado</h1>
+      <p>La zona WiFi del dispositivo ha sido deshabilitada.</p>
+      <p>Reinicia el dispositivo para habilitar la zona WiFi de nuevo.</p>
+      <p>El dispositivo se apagará automáticamente una vez finalizados los Pomodoros programados.</p>
+  </div>
+</body>
+</html>
+
+
+  )";
+
+ 
+  // Send HTML code
+  server.send(200, "text/html", htmlCode);
+  
+  
+  // Shut down the AP
+
+  stopAccessPoint();
+
+
+
+
+}
+
+
+// Stop the system after 5 minutes if no pomodoro is configured
+  // declare variables as global
+  
+  int minutes = 5;
+  int remaining = 0;
+void systemStop(){
+
+  /*
+  while (seconds <= 300){
+  if (seconds == total){
+    stopAccessPoint();
+    seconds++;
+
+  }
+  if (seconds < total ){
+    remaining = total - seconds;
+    //Serial.println("Awaiting action - " + String(remaining) + " seconds left to shutdown AP");
+    if (seconds % 60 == 0) {
+      int minutes = remaining / 60;
+      Serial.println(String(minutes) + " minutes remaining to shut down the AP");
+    }
+    seconds++;
+    
+
+    delay(1000);
+
+  }
+  */
+  if (minutes == 0){
+    Serial.println("Stopping the AP");
+    stopAccessPoint();
+    minutes--;
+  }else{
+    Serial.println(String(minutes) + " minutes left");
+    minutes--;
+  }
+}
+
+// Define task so a timer will run in the background to stop the device automatically
+
+Task stopSystem(60000, 6, &systemStop);
+
 
 // Pomodoro function declaration
 // pomodoro(fColor, bColor, focusHours, focusMinutes, breakMinutes, cyclesInt);
@@ -103,9 +274,18 @@ for (int i = 0; i < cyclesInt; i++) {
 
   // Start the Pomodoro process
 
+  //debug variable print in serial monitor
+
+  Serial.println("focusHours value > " + String(focusHours));
+  Serial.println("focusMins value > " + String(focusMins));
+
+
   // Start the focus timers
 
+  Serial.println("Start hours timer");
   minuteTimer(focusHours*60);
+  
+  Serial.println("Start minutes timer");
   minuteTimer(focusMins);
 
 
@@ -135,73 +315,10 @@ setColor(strip.Color(0, 0, 0)); // switch off all the leds
 
 }
 
-void shutdown() {
- 
-  String htmlCode = R"(
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>WiFi desactivado</title>
-        <style>
-            body {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                height: 100vh;
-                margin: 0;
-                font-family: Arial, sans-serif;
-            }
-
-            .message {
-                text-align: center;
-                padding: 20px;
-                border: 2px solid #FF0000;
-                border-radius: 8px;
-                background-color: #FFE6E6;
-                max-width: 400px;
-                width: 100%;
-            }
-
-            h1 {
-                color: #FF0000;
-            }
-
-            p {
-                color: #333333;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="message">
-            <h1>WiFi Desactivado</h1>
-            <p>La zona WiFi del dispositivo ha sido deshabilitada.</p>
-            <p>Reinicia el dispositivo para habilitar la zona WiFi de nuevo.</p>
-            <p>El dispositivo se apagará automáticamente una vez finalizados los Pomodoros programados.</p>
-        </div>
-    </body>
-    </html>
-
-    )";
-
- 
-  // Send HTML code
-  server.send(200, "text/html", htmlCode);
-  
-  
-  // Shut down the AP
-
-  stopAccessPoint();
-
-
-
-
-}
 
 
 /* attempt 1 of send image
-void sendImage(){
+void sendFile(){
 
   server.send(200, "/brain.png", "http://192.168.4.1/brain.png");
 
@@ -210,17 +327,19 @@ void sendImage(){
 
 // attempt 2
 
-void sendImage() {
+void sendFile(String filename) {
 
 
   //Verify if the requested file exists
-  String path = "/brain.png"; //hardcode brain image path
-  Serial.println("Checking file path: " + path);
+  String path = "/" + String(filename); //hardcode brain image path
+  Serial.println("[i] Checking file path: " + path);
   // Check if the file exists
   if (!LittleFS.exists(path)) {
-    Serial.println("File not found");
+    Serial.println("[!] File not found");
     server.send(404, "text/plain", "File not found");
     return;
+  }else{
+    Serial.println("[i] File found in the filesystem");
   }
 
 
@@ -228,8 +347,13 @@ void sendImage() {
   File file = LittleFS.open(path, "r");
   if (!file) {
     server.send(500, "text/plain", "Failed to open file");
+    Serial.println("[!] Failed to open the file");
     return;
+  }else{
+    Serial.println("[i] File opened successfully");
   }
+
+  Serial.println("File name is " + String(file.name()));
 
   // Get the file size
   size_t fileSize = file.size();
@@ -346,13 +470,17 @@ void listFiles(const char* directory) {
 
 //Pomodoro focus configuration platform
 void handleRoot() {
+
+
   String html = R"(
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Configuración de tu Pomodoro</title>
+      <link rel="icon" type="image/x-icon" href="/brainFavicon" sizes="192x192">
+      <link rel="apple-touch-icon" href="/brainFavicon">
+      <title>Pomodoro Focus</title>
       <style>
           @font-face {
               font-family: 'Oswald';
@@ -465,8 +593,8 @@ void handleRoot() {
       </style>
   </head>
   <body>
-      <div class="header-container">
-          <img src="/brain">
+      <div class="header-container" style="user-select: none;">
+          <img src="/brain" draggable="false">
           <h2>Configuración de tu Pomodoro</h2>
       </div>
 
@@ -495,8 +623,10 @@ void handleRoot() {
   </html>
 )";
 server.send(200, "text/html", html);
-
-sendImage();
+/*
+sendFile("brainFavicon.png");
+sendFile("brain.png");
+*/
 sendFont();
 
 // Set the config to true once the menu has been loaded at least 1 time 
@@ -518,39 +648,84 @@ void handleSubmit() {
 
   String htmlCode = R"(
   <!DOCTYPE html>
-  <html lang="es">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Configuración Exitosa</title>
-      <style>
-          body {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              margin: 0;
-          }
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración exitosa</title>
+  <link rel="icon" type="image/x-icon" href="/dashboard/brainFavicon.ico" sizes="57x57">
+  <link rel="apple-touch-icon" href="/dashboard/brainFavicon.ico">
+  <style>
+    @font-face {
+      font-family: 'Oswald';
+      src: url('Oswald-Regular.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
 
-          .message {
-              text-align: center;
-              padding: 20px;
-              border: 2px solid #4CAF50;
-              border-radius: 8px;
-              background-color: #E9F8F2;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="message">
-          <h1>Pomodoros en proceso</h1>
-          <p>La configuración se ha establecido correctamente.</p>
-          <p>En<strong> 5 segundos </strong>se apagará la zona WiFi</p>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font-family: 'Oswald', 'Arial', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #000;
+      color: #fff;
+      transform: scale(1);
+    }
+
+    .header-container {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 10px; /* Optional: Add padding to the header-container */
+      justify-content: center; /* Add this line to center the content horizontally */
+    }
+
+    .header-container img {
+      width: 50px;
+      margin-right: 10px;
+    }
+
+    h1 {
+      color: #04d112;
+      margin: 0; /* Add this line to center the h1 */
+    }
+
+    .message {
+      border: 2px solid #04d112; /* Adapted border style from the first code */
+      text-align: center;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 400px;
+      width: 100%;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="message">
+    <div class="header-container">
+      <div style="user-select: none;">
+        <h1>Configuración Exitosa</h1>
       </div>
-  </body>
-  </html>
+    </div>
+    <p>La configuración se ha establecido correctamente</p>
+    <p>En <strong>10 segundos</strong> se apagará la zona WiFi</p>
+  </div>
+</body>
+</html>
   )";
   
+  
+
   /* IN CASE I WANT TO STORE THE DATA IN THE MEMORY USE THIS
   // Handle form submission here
   String focusHours = server.arg("focusHours");
@@ -608,7 +783,14 @@ void handleSubmit() {
   */
 
 
+  // config value debugging in serial monitor
+
+  Serial.println("The variable config value is: " + String(config));
+  Serial.println("The variable CONFIG value is: " + String(CONFIG));
+
   if (config == "true" && CONFIG){ //ONLY ACCESS TO SUBMIT IF THE DEVICE IS CONFIGURED
+
+    Serial.println("Config if has been passed");
 
     // SETTING THE CONFIG VARIABLE TO FALSE AGAIN SO THE SERVER CANNOT BE SHUTDOWN TWICE
 
@@ -620,12 +802,15 @@ void handleSubmit() {
     setColor(fColor);
 
     server.send(200, "text/html", htmlCode);
+
+    sendFont();
+
     
 
 
     // Disconnect the AP
 
-    shutdown(); 
+    stopAccessPoint(); 
 
     
     // Start rolling the colors the Pomodoro
@@ -646,6 +831,8 @@ void getTest(){
 }
 
 void setup() {
+
+
   Serial.begin(115200);
   initFS();
 
@@ -653,16 +840,15 @@ void setup() {
   strip.begin();  // Inicializar la tira de LEDs
   strip.show();
   setColor(strip.Color(0, 0, 0)); // switch off all the leds
-
+  printApMode();
   // Iniciar en modo de punto de acceso
+  Serial.println("Starting AP...");
   WiFi.mode(WIFI_AP);
   WiFi.softAP("BeamFocus-AP", "password"); // Nombre de la red y contraseña del AP
-
+  printApMode();
 
   // list files in /
   listFiles("/");
-
-
 
   // Store the local AP IP address
   apIPAddress = WiFi.softAPIP();
@@ -670,7 +856,11 @@ void setup() {
   Serial.println(apIPAddress);
 
 
+  // Add the task to the scheduler
+  scheduler.addTask(stopSystem);
 
+  // Enable the task
+  stopSystem.enable();
   
   // Set up DNS server
 
@@ -685,21 +875,25 @@ void setup() {
   server.on("/submit", HTTP_POST, handleSubmit);
 
   // Retrieve the configuration vlaues in the GET URL
-  server.on("/submit", HTTP_GET, getTest);
+  //server.on("/submit", HTTP_GET, getTest);
 
 
   // Stop the access point
   server.on("/shutdown", HTTP_GET, shutdown);
+  
+  // Send the png brain.png file through this function
+  server.on("/brain", HTTP_GET, [](){ sendFile("brain.png"); });
 
-  // Send the png file
-  server.on("/brain", HTTP_GET, sendImage);
-
+  // Send the png brain.png file through this function
+  server.on("/brainFavicon", HTTP_GET, [](){ sendFile("brainFavicon.ico"); });
+  
   // Send the ttf (oswald font) file
   server.on("/font", HTTP_GET, sendFont);
 
   // Start web server
   server.begin();
   Serial.println("Servidor web iniciado");
+
 
   // Set up captive portal redirection
   server.onNotFound([]() {
@@ -716,7 +910,10 @@ void setup() {
 
 }
 
+
 void loop() {
+
+
 
   // Listen for DNS Requests
 
@@ -725,6 +922,10 @@ void loop() {
   // Listen for HTTP Requests
 
   server.handleClient();
+
+  // Update the scheduler
+
+  scheduler.execute();
 
 
  
