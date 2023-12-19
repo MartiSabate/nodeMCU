@@ -105,22 +105,6 @@ Serial.print("Stopping Access Point...");
 
 //10 second delay before stopping the device
 
-int delaySeconds = 10;
-
-for ( int i = 0; i<delaySeconds; i++){
-  Serial.print(String(delaySeconds-i));
-  delay(500);
-  Serial.print(".");
-  delay(500);
-  
-}
-
-Serial.print("\n---\n");
-// Stop the WiFi AP
-WiFi.softAPdisconnect(true);  // Disconnect clients and stop the AP
-WiFi.mode(WIFI_OFF);          // Switch off WiFi completely or use WIFI_STA if you need to connect to a station
-
-printApMode();
 
 Serial.println("Sleep the arduino indefinitely (until the reset button is pushed / pin 16 is activated)");
 
@@ -311,6 +295,10 @@ for (int i = 0; i < cyclesInt; i++) {
 // Once the loop ends shut down the leds again
 
 setColor(strip.Color(0, 0, 0)); // switch off all the leds
+
+// Stop completely the Node MCU
+
+stopAccessPoint();
 
 
 }
@@ -810,7 +798,13 @@ void handleSubmit() {
 
     // Disconnect the AP
 
-    stopAccessPoint(); 
+    Serial.print("\n---\n");
+    // Stop the WiFi AP
+    WiFi.softAPdisconnect(true);  // Disconnect clients and stop the AP
+    WiFi.mode(WIFI_OFF);          // Switch off WiFi completely or use WIFI_STA if you need to connect to a station
+
+    printApMode();
+
 
     
     // Start rolling the colors the Pomodoro
